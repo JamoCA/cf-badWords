@@ -1,0 +1,447 @@
+/**
+ * BadWords.cfc
+ * Author:  James Moberg <james@sunstarmedia.com>
+ * Date:    2026-04-19
+ * Target:  ColdFusion 2016+
+ * Spec:    docs/superpowers/specs/2026-04-19-badwords-cfc-design.md
+ *
+ * Profanity detection and filtering. Normalizes input through the AnyAscii
+ * Java library so all matching is performed on ASCII-7 regardless of the
+ * original script, style, or obfuscation technique.
+ */
+component displayname="BadWords" output="false" hint="Profanity detection and filtering with AnyAscii-backed normalization" {
+
+	// ---- Constants (severity + categories) ----
+	variables.SEVERITY = [ "mild": 1, "moderate": 2, "severe": 3, "slur": 4 ];
+	variables.SEVERITY_BY_CODE = [ "1": "mild", "2": "moderate", "3": "severe", "4": "slur" ];
+	variables.CATEGORY = [
+		"sexual": 1, "insult": 2, "discriminatory": 4, "inappropriate": 8,
+		"blasphemy": 16, "bodily": 32, "violence": 64, "substance": 128
+	];
+	variables.CATEGORY_BY_BIT = [
+		"1":"sexual","2":"insult","4":"discriminatory","8":"inappropriate",
+		"16":"blasphemy","32":"bodily","64":"violence","128":"substance"
+	];
+	variables.JTRUE = javacast("boolean", 1);
+	variables.JFALSE = javacast("boolean", 0);
+
+	/**
+	 * @param languages      Comma-list of Java ISO language codes.
+	 *                       Invalid codes dropped; if nothing valid remains, "en" loaded.
+	 * @param configPath     Directory holding <code>.json dictionaries.
+	 *                       Default: ./config relative to this CFC.
+	 * @param jarPath        Path to anyascii-0.3.3.jar.
+	 *                       Default: ./lib/anyascii-0.3.3.jar relative to this CFC.
+	 * @param decodePunycode Decode xn-- ACE labels before normalization.
+	 */
+	public BadWords function init(
+		string languages = "en",
+		string configPath = "",
+		string jarPath = "",
+		boolean decodePunycode = variables.JTRUE
+	) {
+		var myDir = getDirectoryFromPath(getMetaData(this).path);
+		variables.configPath     = len(arguments.configPath) ? arguments.configPath : myDir & "config/";
+		variables.jarPath        = len(arguments.jarPath)    ? arguments.jarPath    : myDir & "lib/anyascii-0.3.3.jar";
+		variables.decodePunycode = arguments.decodePunycode;
+
+		variables.anyAscii       = createObject("java", "com.anyascii.AnyAscii");
+		variables.idn            = createObject("java", "java.net.IDN");
+
+		// Will be populated by subsequent tasks:
+		variables.dict = [ "words": [:], "regex": [], "allow": [:], "replacements": [ "byLength": [:] ] ];
+		variables.loadedLanguages = [];
+		variables.invalidLanguages = [];
+
+		// Parse languages arg
+		var requested = listToArray(arguments.languages, ",");
+		var candidates = [];
+		for (var code in requested) {
+			code = lcase(trim(code));
+			if (len(code) && reFind("^[a-z]{2,3}(-[a-z]{2,4})?$", code)) {
+				arrayAppend(candidates, code);
+			} else if (len(code)) {
+				arrayAppend(variables.invalidLanguages, code);
+			}
+		}
+
+		for (var code in candidates) {
+			try { this.loadDictionary(code); }
+			catch (any e) { arrayAppend(variables.invalidLanguages, code); }
+		}
+
+		// Fallback to en if nothing loaded successfully
+		if (!arrayLen(variables.loadedLanguages)) {
+			try { this.loadDictionary("en"); } catch (any e) {
+				if (!arrayFind(variables.loadedLanguages, "en")) {
+					arrayAppend(variables.loadedLanguages, "en");
+				}
+			}
+		}
+
+		return this;
+	}
+
+	/**
+	 * Loads (or merges) a language pack by code. Expects file configPath/<code>.json.
+	 */
+	public void function loadDictionary(required string languageCode) {
+		var fp = variables.configPath & arguments.languageCode & ".json";
+		if (!fileExists(fp)) { throw(type="BadWords.DictMissing", message="Dictionary not found: " & fp); }
+		var data = deserializeJSON(fileRead(fp));
+		if (!structKeyExists(data, "words")) { data.words = [:]; }
+		if (!structKeyExists(data, "regex")) { data.regex = [:]; }
+		if (!structKeyExists(data, "allow")) { data.allow = []; }
+
+		// Merge words
+		for (var w in data.words) {
+			var entry = data.words[w];
+			variables.dict.words[lcase(w)] = [
+				"s":   int(structKeyExists(entry, "s") ? entry.s : 2),
+				"c":   int(structKeyExists(entry, "c") ? entry.c : 0),
+				"src": arguments.languageCode
+			];
+		}
+
+		// Merge + compile regex
+		for (var pattern in data.regex) {
+			var entry = data.regex[pattern];
+			var compiled = "";
+			try { compiled = createObject("java","java.util.regex.Pattern").compile(pattern); }
+			catch (any e) { continue; }
+			arrayAppend(variables.dict.regex, [
+				"pattern":  pattern,
+				"compiled": compiled,
+				"s":        int(structKeyExists(entry, "s") ? entry.s : 2),
+				"c":        int(structKeyExists(entry, "c") ? entry.c : 0),
+				"src":      arguments.languageCode
+			]);
+		}
+
+		// Merge allowlist
+		for (var a in data.allow) { variables.dict.allow[lcase(a)] = variables.JTRUE; }
+
+		if (!arrayFind(variables.loadedLanguages, arguments.languageCode)) {
+			arrayAppend(variables.loadedLanguages, arguments.languageCode);
+		}
+	}
+
+	/**
+	 * Core scanner. Returns array of match structs (see spec §8).
+	 */
+	public array function scan(required string text) {
+		var rawText   = arguments.text;
+		var pcyHits   = [];
+		var preText   = rawText;
+		if (variables.decodePunycode) {
+			var pcy = _decodePunycode(rawText);
+			pcyHits = pcy.hits;
+			preText = pcy.decoded;
+		}
+		var asciiText = _anyAscii(preText);
+		asciiText     = _stripControlChars(asciiText);
+		asciiText     = lcase(asciiText);
+		asciiText     = _collapseWhitespace(asciiText);
+
+		var tokens  = this.tokenize(asciiText);
+		var results = [];
+
+		// Pass 2: dictionary lookup
+		for (var i = 1; i lte arrayLen(tokens); i++) {
+			var t = tokens[i];
+			var key = t.token;
+			if (structKeyExists(variables.dict.allow, key)) { continue; }
+			if (structKeyExists(variables.dict.words, key)) {
+				var entry = variables.dict.words[key];
+				arrayAppend(results, [
+					"word":       key,
+					"original":   key,
+					"startPos":   t.startPos,
+					"length":     t.length,
+					"severity":   this.severityLabel(entry.s),
+					"categories": this.categoryLabels(entry.c),
+					"source":     "dictionary"
+				]);
+			}
+		}
+
+		// Build "already claimed" ranges from pass 2 so regex pass doesn't double-report
+		var claimed = [];
+		for (var rprev in results) {
+			arrayAppend(claimed, [ "start": rprev.startPos, "end": rprev.startPos + rprev.length - 1 ]);
+		}
+
+		// Punycode emission: surface per-label detections from step ① of normalization
+		for (var ph in pcyHits) {
+			arrayAppend(results, [
+				"word":       ph.label,
+				"original":   ph.label,
+				"startPos":   ph.startPos,
+				"length":     ph.length,
+				"severity":   "mild",
+				"categories": ["punycode"],
+				"source":     "punycode"
+			]);
+		}
+
+		// Pass 3: regex against full normalized text
+		for (var rx in variables.dict.regex) {
+			var matcher = rx.compiled.matcher(toString(asciiText));
+			while (matcher.find()) {
+				var matched = matcher.group();
+				var sPos    = matcher.start() + 1;
+				var ePos    = matcher.end();
+				if (structKeyExists(variables.dict.allow, matched)) { continue; }
+				var swallowed = variables.JFALSE;
+				for (var c in claimed) {
+					if (sPos gte c.start && ePos lte c.end) { swallowed = variables.JTRUE; break; }
+				}
+				if (swallowed) { continue; }
+				arrayAppend(results, [
+					"word":       matched,
+					"original":   matched,
+					"startPos":   sPos,
+					"length":     ePos - sPos + 1,
+					"severity":   this.severityLabel(rx.s),
+					"categories": this.categoryLabels(rx.c),
+					"source":     "regex"
+				]);
+			}
+		}
+
+		return results;
+	}
+
+	public void function addAllow(required string word) {
+		variables.dict.allow[lcase(trim(arguments.word))] = variables.JTRUE;
+	}
+
+	public void function addWord(required string word, string severity = "moderate", any categories = []) {
+		variables.dict.words[lcase(trim(arguments.word))] = [
+			"s":   this.severityCode(arguments.severity),
+			"c":   this.categoryMask(arguments.categories),
+			"src": "runtime"
+		];
+	}
+
+	public void function addRegex(required string pattern, string severity = "moderate", any categories = []) {
+		var compiled = "";
+		try { compiled = createObject("java","java.util.regex.Pattern").compile(arguments.pattern); }
+		catch (any e) { return; }
+		arrayAppend(variables.dict.regex, [
+			"pattern":  arguments.pattern,
+			"compiled": compiled,
+			"s":        this.severityCode(arguments.severity),
+			"c":        this.categoryMask(arguments.categories),
+			"src":      "runtime"
+		]);
+	}
+
+	/**
+	 * Loads a replacements.json file and merges its byLength buckets in.
+	 */
+	public void function loadReplacements(string filePath = "") {
+		var fp = len(arguments.filePath) ? arguments.filePath : variables.configPath & "replacements.json";
+		if (!fileExists(fp)) { return; }
+		var data = deserializeJSON(fileRead(fp));
+		if (!structKeyExists(data, "byLength")) { return; }
+		for (var k in data.byLength) {
+			variables.dict.replacements.byLength[k] = data.byLength[k];
+		}
+	}
+
+	/**
+	 * Censors using rated-G replacements from the loaded pool, falling back to
+	 * <code>fallbackMask</code> when length is out of range or pool is empty.
+	 */
+	public string function substitute(
+		required string text,
+		string fallbackMask = "*",
+		numeric minLength = 3,
+		numeric maxLength = 12
+	) {
+		var hits = this.scan(arguments.text);
+		var normalized = this.normalize(arguments.text);
+		arraySort(hits, function(a,b){ return b.startPos - a.startPos; });
+		var output = normalized;
+		var pool = variables.dict.replacements.byLength;
+		for (var h in hits) {
+			if (h.source eq "punycode") { continue; }
+			var before = mid(output, 1, h.startPos - 1);
+			var tok    = mid(output, h.startPos, h.length);
+			var after  = mid(output, h.startPos + h.length, len(output) - (h.startPos + h.length) + 1);
+			var L      = len(tok);
+			var key    = toString(L);
+			var replacement = "";
+			if (L gte arguments.minLength
+				&& L lte arguments.maxLength
+				&& structKeyExists(pool, key)
+				&& isArray(pool[key])
+				&& arrayLen(pool[key]) gt 0) {
+				replacement = pool[key][randRange(1, arrayLen(pool[key]))];
+			} else {
+				replacement = reReplace(tok, "[a-z]", arguments.fallbackMask, "all");
+			}
+			output = before & replacement & after;
+		}
+		return output;
+	}
+
+	public boolean function isProfane(required string text) {
+		return arrayLen(this.scan(arguments.text)) gt 0;
+	}
+
+	/**
+	 * Returns normalized form of <code>text</code> with each matched word's
+	 * letters replaced by <code>mask</code>. Non-letter characters inside a
+	 * match (digits, colons, apostrophes) are preserved.
+	 */
+	public string function censor(required string text, string mask = "*") {
+		var hits = this.scan(arguments.text);
+		var normalized = this.normalize(arguments.text);
+		// Sort by startPos descending so splices don't shift earlier indexes
+		arraySort(hits, function(a,b){ return b.startPos - a.startPos; });
+		var output = normalized;
+		for (var h in hits) {
+			if (h.source eq "punycode") { continue; } // punycode positions are in raw, not normalized
+			var before = mid(output, 1, h.startPos - 1);
+			var tok    = mid(output, h.startPos, h.length);
+			var after  = mid(output, h.startPos + h.length, len(output) - (h.startPos + h.length) + 1);
+			var masked = reReplace(tok, "[a-z]", arguments.mask, "all");
+			output = before & masked & after;
+		}
+		return output;
+	}
+
+	public struct function getConfig() {
+		var wordCounts = [:];
+		for (var w in variables.dict.words) {
+			var src = variables.dict.words[w].src;
+			wordCounts[src] = (structKeyExists(wordCounts, src) ? wordCounts[src] : 0) + 1;
+		}
+		return [
+			"languages":                 variables.loadedLanguages,
+			"invalidLanguagesRequested": variables.invalidLanguages,
+			"severities":                variables.SEVERITY,
+			"categories":                variables.CATEGORY,
+			"decodePunycode":            variables.decodePunycode,
+			"wordCounts":                wordCounts,
+			"regexCount":                arrayLen(variables.dict.regex),
+			"allowCount":                structCount(variables.dict.allow)
+		];
+	}
+
+	public any function getAnyAsciiInstance() { return variables.anyAscii; }
+
+	public numeric function severityCode(required string label) {
+		var key = lcase(arguments.label);
+		return structKeyExists(variables.SEVERITY, key) ? variables.SEVERITY[key] : 2;
+	}
+
+	public string function severityLabel(required numeric code) {
+		var key = toString(int(arguments.code));
+		return structKeyExists(variables.SEVERITY_BY_CODE, key) ? variables.SEVERITY_BY_CODE[key] : "moderate";
+	}
+
+	/**
+	 * Accepts array of labels, comma-list, or integer bitmask. Returns int mask.
+	 * Unknown labels dropped silently.
+	 */
+	public numeric function categoryMask(required any categories) {
+		if (isNumeric(arguments.categories)) { return int(arguments.categories); }
+		var list = isArray(arguments.categories) ? arguments.categories : listToArray(arguments.categories, ",");
+		var mask = 0;
+		for (var item in list) {
+			var key = lcase(trim(item));
+			if (structKeyExists(variables.CATEGORY, key)) {
+				mask = bitOr(mask, variables.CATEGORY[key]);
+			}
+		}
+		return mask;
+	}
+
+	public array function categoryLabels(required numeric mask) {
+		var out = [];
+		var m = int(arguments.mask);
+		for (var bit in variables.CATEGORY_BY_BIT) {
+			if (bitAnd(m, int(bit)) gt 0) { arrayAppend(out, variables.CATEGORY_BY_BIT[bit]); }
+		}
+		return out;
+	}
+
+	/**
+	 * Splits normalized text into tokens. Positions are 1-based into the input.
+	 * Token shape: "[\w':]+" (word chars + apostrophe + colon).
+	 * The colon keeps :eggplant:-style emoji tokens whole.
+	 */
+	public array function tokenize(required string text) {
+		var p = createObject("java", "java.util.regex.Pattern").compile("[\w':]+");
+		var matcher = p.matcher(toString(arguments.text));
+		var out = [];
+		while (matcher.find()) {
+			arrayAppend(out, {
+				"token":    matcher.group(),
+				"startPos": matcher.start() + 1,
+				"length":   matcher.end() - matcher.start()
+			});
+		}
+		return out;
+	}
+
+	public string function normalize(required string text) {
+		var s = arguments.text;
+		if (variables.decodePunycode) {
+			s = _decodePunycode(s).decoded;
+		}
+		s = _anyAscii(s);
+		s = _stripControlChars(s);
+		s = lcase(s);
+		s = _collapseWhitespace(s);
+		return s;
+	}
+
+	/**
+	 * Scans a string for xn-- ACE labels; decodes each via IDN.toUnicode().
+	 * Returns { decoded: <string>, hits: [{ label, startPos, length }, ...] }.
+	 */
+	private struct function _decodePunycode(required string text) {
+		var src  = arguments.text;
+		var hits = [];
+		var p = createObject("java", "java.util.regex.Pattern").compile("(?i)xn--[a-z0-9\-]+");
+		var matcher = p.matcher(toString(src));
+		var out = "";
+		var lastEnd = 0;
+		while (matcher.find()) {
+			var start = matcher.start();
+			var endPos = matcher.end();
+			var label = matcher.group();
+			var decoded = label;
+			try { decoded = variables.idn.toUnicode(toString(label)); }
+			catch (any e) { decoded = label; }
+			if (decoded != label) {
+				arrayAppend(hits, [ "label": label, "startPos": start + 1, "length": endPos - start ]);
+			}
+			out &= mid(src, lastEnd + 1, start - lastEnd) & decoded;
+			lastEnd = endPos;
+		}
+		out &= mid(src, lastEnd + 1, len(src) - lastEnd);
+		return { "decoded": out, "hits": hits };
+	}
+
+	private string function _anyAscii(required string text) {
+		return variables.anyAscii.transliterate(toString(arguments.text));
+	}
+
+	private string function _stripControlChars(required string text) {
+		// Strip ASCII 0-31 except \t (9), \n (10), \r (13).
+		// Survivors after anyAscii are a subset of these (probe verified).
+		return toString(arguments.text).replaceAll("[\x00-\x08\x0B\x0C\x0E-\x1F]", "");
+	}
+
+	private string function _collapseWhitespace(required string text) {
+		var s = toString(arguments.text);
+		s = s.replaceAll("\s+", " ");
+		s = s.replaceAll("^ | $", "");
+		return s;
+	}
+}

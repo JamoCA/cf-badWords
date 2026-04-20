@@ -1,0 +1,11 @@
+{
+  "meta": { "language": "en", "version": "test", "source": "fixture", "lastUpdated": "2026-04-19" },
+  "words": {
+    "fuck":    { "s": 2, "c": 1 },
+    "asshole": { "s": 2, "c": 2 }
+  },
+  "regex": {
+    "\\bf+u+c+k+\\w*\\b": { "s": 2, "c": 1 }
+  },
+  "allow": [ "cockpit", "scunthorpe" ]
+}

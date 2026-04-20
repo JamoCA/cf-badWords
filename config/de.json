@@ -1,0 +1,57 @@
+{
+  "meta": {
+    "language":    "de",
+    "version":     "1.0.0",
+    "source":      "curated German profanity; conservative seed",
+    "lastUpdated": "2026-04-19"
+  },
+  "words": {
+    "scheisse":      { "s": 2, "c": 8  },
+    "scheiss":       { "s": 2, "c": 8  },
+    "scheisser":     { "s": 2, "c": 2  },
+    "arsch":         { "s": 1, "c": 2  },
+    "arschloch":     { "s": 2, "c": 2  },
+    "arschgesicht":  { "s": 2, "c": 2  },
+    "ficken":        { "s": 2, "c": 1  },
+    "fick":          { "s": 2, "c": 1  },
+    "ficker":        { "s": 2, "c": 2  },
+    "fotze":         { "s": 3, "c": 3  },
+    "muschi":        { "s": 2, "c": 1  },
+    "schwanz":       { "s": 1, "c": 1  },
+    "schwuchtel":    { "s": 4, "c": 4  },
+    "schwul":        { "s": 2, "c": 4  },
+    "hure":          { "s": 2, "c": 2  },
+    "hurensohn":     { "s": 3, "c": 2  },
+    "nutte":         { "s": 2, "c": 2  },
+    "wichser":       { "s": 2, "c": 3  },
+    "wichsen":       { "s": 2, "c": 1  },
+    "verdammt":      { "s": 1, "c": 16 },
+    "verflucht":     { "s": 1, "c": 16 },
+    "mistkerl":      { "s": 2, "c": 2  },
+    "mistweib":      { "s": 2, "c": 2  },
+    "schweinehund":  { "s": 2, "c": 2  },
+    "kacke":         { "s": 1, "c": 32 },
+    "kacken":        { "s": 1, "c": 32 },
+    "pisse":         { "s": 1, "c": 32 },
+    "pissen":        { "s": 1, "c": 32 },
+    "titten":        { "s": 1, "c": 1  },
+    "neger":         { "s": 4, "c": 4  },
+    "kanake":        { "s": 4, "c": 4  },
+    "polacke":       { "s": 4, "c": 4  },
+    "judensau":      { "s": 4, "c": 4  },
+    "blodmann":      { "s": 1, "c": 2  },
+    "trottel":       { "s": 1, "c": 2  },
+    "depp":          { "s": 1, "c": 2  },
+    "idiot":         { "s": 1, "c": 2  }
+  },
+  "regex": {
+    "\\bs+ch+e+i+s+\\w*\\b":     { "s": 2, "c": 8  },
+    "\\bf+i+c+k+\\w*\\b":        { "s": 2, "c": 1  },
+    "\\barschl[o0]ch+\\w*\\b":   { "s": 2, "c": 2  }
+  },
+  "allow": [
+    "fischer", "fischen", "schwung", "schwer", "schweben",
+    "geschwind", "geschwister", "schwert", "schwarz",
+    "kachel", "kachelofen", "scheinen", "scheine"
+  ]
+}

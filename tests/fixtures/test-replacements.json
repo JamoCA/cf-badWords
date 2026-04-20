@@ -1,0 +1,7 @@
+{
+  "meta": { "version": "test", "source": "fixture", "lastUpdated": "2026-04-19" },
+  "byLength": {
+    "4": ["love","hugs"],
+    "7": ["bunnies","rainbow"]
+  }
+}

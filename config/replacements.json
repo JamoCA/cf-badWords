@@ -1,0 +1,19 @@
+{
+  "meta": {
+    "version":     "1.0.0",
+    "source":      "curated rated-G English common nouns / verbs / adjectives",
+    "lastUpdated": "2026-04-19"
+  },
+  "byLength": {
+    "3":  ["cat","dog","sun","pie","hug","bee","elf","fox","joy","tea","owl","cub","ant","cow","fig","jam","key","pea","tin","toy"],
+    "4":  ["love","tree","book","cake","fish","bird","gift","duck","snow","moon","frog","lamb","star","wave","pear","kite","seal","rose","cozy","mint"],
+    "5":  ["happy","music","candy","bunny","pizza","beach","smile","cloud","dance","teddy","panda","peach","daisy","lemon","mango","otter","koala","honey","jolly","puppy"],
+    "6":  ["kitten","garden","rocket","flower","friend","rabbit","cookie","ribbon","banana","giggle","sunray","sundae","castle","bubble","muffin","pretty","magnet","laughs","breezy","pickle"],
+    "7":  ["bunnies","rainbow","sunrise","cookies","dolphin","muffins","pancake","sunbeam","meadows","blanket","kittens","unicorn","popcorn","seaside","freckle","hugging","camping","cuddles","flowers","giggles"],
+    "8":  ["sunshine","cupcakes","pancakes","lollipop","sparkles","starfish","snowfall","rainbows","balloons","hamsters","lavender","kindness","daffodil","brownies","snowball","sandbox","seashell","nightcap","cuddling","sweetpea"],
+    "9":  ["dandelion","chocolate","pineapple","butterfly","snowdrops","sunflower","cuddliest","gumdroppy","fireflies","campsides","waterfall","blueberry","cupcakery","raspberry","starlight","magicwand","cinnamony","songbirds","mittenpaw","muffintops"],
+    "10": ["strawberry","watermelon","butterflys","peppermint","marshmellw","gingerbred","bumblebees","honeybears","sunflowers","dandelions","tangerines","kittenpaws","starfishes","cupcakings","sugarcanes","jellybeans","snowflakes","puppylicks","rainbowsky","cozyhouses"],
+    "11": ["caterpillar","marshmallow","butterflies","gingerbread","peppermints","raspberries","chocolatebr","blueberries","strawberrys","watermelons","pomegranati","honeysuckle","shortbreads","cottoncandy","sugarplumsy","cinnamonrll","juniperbery","butternutsy","pumpkinspic","warmfuzzies"],
+    "12": ["pomegranates","huckleberrys","dragonfruits","passionfruit","juicyoranges","clementines1","bumblebeebtn","cranberriesy","mulberryjams","cinnamontart","honeycombbee","pinecharming","hazelnutspie","butternutsqu","sweetpotatoe","cottagepieee","apricotjams1","cherrypopsic","chocolatebar","maplecookies"]
+  }
+}

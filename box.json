@@ -1,0 +1,13 @@
+{
+    "name": "BadWords",
+    "version": "0.1.0",
+    "author": "James Moberg <james@sunstarmedia.com>",
+    "location": "",
+    "slug": "badwords",
+    "shortDescription": "Profanity detection and filtering for CFML with AnyAscii-backed normalization",
+    "type": "cfml-library",
+    "keywords": ["profanity", "filter", "badwords", "anyascii", "unicode"],
+    "engines": [
+        { "type": "adobe", "version": ">=2016.0.0" }
+    ]
+}
