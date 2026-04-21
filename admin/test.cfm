@@ -40,8 +40,13 @@
 		<label style="flex:1;">Languages (comma-list)
 			<input type="text" name="languages" value="#encodeForHtml(form.languages)#" placeholder="en,fr">
 		</label>
-		<label>Mask char
-			<input type="text" name="censor_mask" value="#encodeForHtml(form.censor_mask)#" maxlength="3" style="width:60px;">
+		<label>Mask
+			<select name="censor_mask">
+				<option value="*"        <cfif form.censor_mask eq "*">selected</cfif>>* (asterisk)</option>
+				<option value="x"        <cfif form.censor_mask eq "x">selected</cfif>>x</option>
+				<option value="#chr(9608)#" <cfif form.censor_mask eq chr(9608)>selected</cfif>>&##9608; (full block)</option>
+				<option value="grawlix"  <cfif form.censor_mask eq "grawlix">selected</cfif>>grawlix (!@$%&amp;*)</option>
+			</select>
 		</label>
 		<label style="display:flex;align-items:center;gap:6px;">
 			<input type="checkbox" name="decode_punycode" value="1" <cfif form.decode_punycode eq "1">checked</cfif>>

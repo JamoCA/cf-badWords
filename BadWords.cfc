@@ -280,7 +280,23 @@ component displayname="BadWords" output="false" hint="Profanity detection and fi
 				&& arrayLen(pool[key]) gt 0) {
 				replacement = pool[key][randRange(1, arrayLen(pool[key]))];
 			} else {
-				replacement = reReplace(tok, "[a-z]", arguments.fallbackMask, "all");
+				if (lcase(arguments.fallbackMask) eq "grawlix") {
+					var letterCount = len(reReplace(tok, "[^a-z]", "", "all"));
+					var gl = _grawlix(letterCount);
+					var gi = 1;
+					replacement = "";
+					for (var ci = 1; ci lte len(tok); ci++) {
+						var ch = mid(tok, ci, 1);
+						if (reFind("[a-z]", ch)) {
+							replacement &= mid(gl, gi, 1);
+							gi++;
+						} else {
+							replacement &= ch;
+						}
+					}
+				} else {
+					replacement = reReplace(tok, "[a-z]", arguments.fallbackMask, "all");
+				}
 			}
 			output = before & replacement & after;
 		}
@@ -307,7 +323,23 @@ component displayname="BadWords" output="false" hint="Profanity detection and fi
 			var before = mid(output, 1, h.startPos - 1);
 			var tok    = mid(output, h.startPos, h.length);
 			var after  = mid(output, h.startPos + h.length, len(output) - (h.startPos + h.length) + 1);
-			var masked = reReplace(tok, "[a-z]", arguments.mask, "all");
+			var masked = "";
+			if (lcase(arguments.mask) eq "grawlix") {
+				var letterCount = len(reReplace(tok, "[^a-z]", "", "all"));
+				var gl = _grawlix(letterCount);
+				var gi = 1;
+				for (var ci = 1; ci lte len(tok); ci++) {
+					var ch = mid(tok, ci, 1);
+					if (reFind("[a-z]", ch)) {
+						masked &= mid(gl, gi, 1);
+						gi++;
+					} else {
+						masked &= ch;
+					}
+				}
+			} else {
+				masked = reReplace(tok, "[a-z]", arguments.mask, "all");
+			}
 			output = before & masked & after;
 		}
 		return output;
@@ -443,5 +475,20 @@ component displayname="BadWords" output="false" hint="Profanity detection and fi
 		s = s.replaceAll("\s+", " ");
 		s = s.replaceAll("^ | $", "");
 		return s;
+	}
+
+	private string function _grawlix(required numeric length) {
+		var pool = [ "!", "@", "$", "%", "&", "*" ];
+		var out = "";
+		var last = "";
+		for (var i = 1; i lte arguments.length; i++) {
+			var pick = pool[randRange(1, arrayLen(pool))];
+			while (pick eq last) {
+				pick = pool[randRange(1, arrayLen(pool))];
+			}
+			out &= pick;
+			last = pick;
+		}
+		return out;
 	}
 }

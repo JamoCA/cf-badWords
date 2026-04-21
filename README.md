@@ -49,6 +49,7 @@ bw.isProfane("aircraft cockpit");  // NO  (Scunthorpe-safe)
 bw.censor("you asshole");          // "you *******"
 bw.censor("you asshole", "x");     // "you xxxxxxx"
 bw.censor("you asshole", chr(9608)); // "you ███████"
+bw.censor("you asshole", "grawlix"); // "you !@$%&*!" (random each call, no consecutive repeats)
 
 bw.substitute("you asshole");      // "you bunnies"  (random rated-G of length 7)
 
@@ -87,8 +88,8 @@ new badwords.BadWords(
 |---|---|
 | `scan(text)` | The primitive. Returns array of match structs. |
 | `isProfane(text)` | Boolean shortcut over `scan()`. |
-| `censor(text, mask = "*")` | Mask matched letters. Non-letter chars (digits, colons) preserved. |
-| `substitute(text, fallbackMask = "*", minLength = 3, maxLength = 12)` | Replace matched words with rated-G words of equal length. Falls back to mask when length is out of range or pool is empty. |
+| `censor(text, mask = "*")` | Mask matched letters. Non-letter chars (digits, colons) preserved. Pass `"grawlix"` (case-insensitive) as the mask for randomized `!@$%&*` output with no consecutive repeats. |
+| `substitute(text, fallbackMask = "*", minLength = 3, maxLength = 12)` | Replace matched words with rated-G words of equal length. Falls back to mask when length is out of range or pool is empty. `fallbackMask` also accepts `"grawlix"`. |
 | `normalize(text)` | Run the full Punycode → AnyAscii → strip → lcase → collapse pipeline. Exposed for debugging and tests. |
 | `tokenize(text)` | Tokenize already-normalized text. Returns array of `[ token, startPos, length ]`. |
 | `addWord(word, severity, categories)` | Add to the in-memory word dictionary. `categories` accepts array of labels, comma-list, or integer bitmask. |
