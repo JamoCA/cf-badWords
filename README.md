@@ -24,12 +24,14 @@ GitHub: https://github.com/JamoCA/cf-badWords
 2. Add the `lib/` directory to `this.javaSettings.loadPaths` in your `Application.cfc`:
 
 ```cfc
+variables.appDir = getDirectoryFromPath(getCurrentTemplatePath());
+
 this.javaSettings = {
-	loadPaths: [ expandPath("./path/to/cf-badWords/lib") ],
+	loadPaths: [ getCanonicalPath(variables.appDir & "./path/to/cf-badWords/lib") ],
 	reloadOnChange: false
 };
 
-this.mappings["/badwords"] = expandPath("./path/to/cf-badWords");
+this.mappings["/badwords"] = getCanonicalPath(variables.appDir & "./path/to/cf-badWords");
 ```
 
 3. Instantiate via the mapping:
