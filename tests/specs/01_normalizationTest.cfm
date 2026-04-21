@@ -3,14 +3,20 @@
 	badWords = new badwords.BadWords();
 	request.assert.isTrue(isObject(badWords), "BadWords() constructs");
 	request.assert.isTrue(isObject(badWords.getAnyAsciiInstance()), "AnyAscii java instance is available");
+	utf8FromHex = function(hex) {
+		return charsetEncode(binaryDecode(hex, "hex"), "utf-8");
+	};
+	greekAnthropoi = utf8FromHex("CEACCEBDCEB8CF81CF89CF80CEBFCEB9");
+	doubleStruckFuck = utf8FromHex("F09D9597F09D95A6F09D9594F09D959C");
+	fullwidthExample = utf8FromHex("EFBD85EFBD98EFBD81EFBD8DEFBD90EFBD8CEFBD85");
 
 	// anyAscii round-trip through the CFC
-	request.assert.isEqual("anthropoi", badWords.getAnyAsciiInstance().transliterate(toString("άνθρωποι")), "anyAscii transliterates Greek");
+	request.assert.isEqual("anthropoi", badWords.getAnyAsciiInstance().transliterate(toString(greekAnthropoi)), "anyAscii transliterates Greek");
 
 	// normalize() — anyAscii + lcase
-	request.assert.isEqual("anthropoi", badWords.normalize("άνθρωποι"), "Greek anthropoi");
-	request.assert.isEqual("fuck",      badWords.normalize("𝕗𝕦𝕔𝕜"),     "Math double-struck -> ASCII");
-	request.assert.isEqual("example",   badWords.normalize("ｅｘａｍｐｌｅ"), "Fullwidth -> ASCII");
+	request.assert.isEqual("anthropoi", badWords.normalize(greekAnthropoi), "Greek anthropoi");
+	request.assert.isEqual("fuck",      badWords.normalize(doubleStruckFuck),     "Math double-struck -> ASCII");
+	request.assert.isEqual("example",   badWords.normalize(fullwidthExample), "Fullwidth -> ASCII");
 	request.assert.isEqual("a b",       badWords.normalize("a b"),            "Plain ASCII unchanged (lowercase)");
 
 	// whitespace collapse + trim

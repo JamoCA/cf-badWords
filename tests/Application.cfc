@@ -3,10 +3,12 @@ component {
 	this.applicationTimeout = createTimeSpan(0, 0, 30, 0);
 	this.sessionManagement = false;
 
+	variables.appDir = getDirectoryFromPath(getCurrentTemplatePath());
+
 	this.javaSettings = {
-		loadPaths: [ expandPath("../lib") ],
+		loadPaths: [ getCanonicalPath(variables.appDir & "../lib") ],
 		reloadOnChange: false
 	};
 
-	this.mappings["/badwords"] = expandPath("..");
+	this.mappings["/badwords"] = getCanonicalPath(variables.appDir & "..");
 }

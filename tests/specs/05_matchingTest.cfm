@@ -27,6 +27,7 @@
 	request.assert.isEqual(0, arrayLen(r2), "allowlisted token skipped by regex pass");
 
 	// 𝕗𝕦𝕔𝕜 (Math double-struck) → "fuck" post-anyAscii → matches via dict (whole-word "fuck")
-	r3 = bw.scan("𝕗𝕦𝕔𝕜 this");
+	pseudoFuck = charsetEncode(binaryDecode("F09D9597F09D95A6F09D9594F09D959C", "hex"), "utf-8");
+	r3 = bw.scan(pseudoFuck & " this");
 	request.assert.isTrue(arrayLen(r3) gte 1, "pseudo-letter attack caught via normalization");
 </cfscript>
