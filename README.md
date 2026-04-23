@@ -1,21 +1,21 @@
 # cf-badWords
 
-CFML profanity detection and filtering for ColdFusion 2016+, backed by AnyAscii so the matcher only ever sees ASCII-7. Handles Unicode pseudo-letters (𝕗𝕦𝕔𝕜), homoglyph attacks (аррӏе.com), Punycode (xn-- ACE labels), zero-width-space smuggling, classic leetspeak, and emoji-as-letters. Ships a curated allowlist so `cockpit`, `Scunthorpe`, `assassin`, `shiitake`, `Penistone`, `analyst`, `bass` and friends stay clean.
+CFML profanity detection and filtering for CFML platforms, backed by AnyAscii so the matcher only ever sees ASCII-7. Handles Unicode pseudo-letters (𝕗𝕦𝕔𝕜), homoglyph attacks (аррӏе.com), Punycode (xn-- ACE labels), zero-width-space smuggling, classic leetspeak, and emoji-as-letters. Ships a curated allowlist so `cockpit`, `Scunthorpe`, `assassin`, `shiitake`, `Penistone`, `analyst`, `bass` and friends stay clean.
 
 GitHub: https://github.com/JamoCA/cf-badWords
 
 ## What's in the box
 
-- `BadWords.cfc` — single-file engine, scripted, CF2016+ compatible
-- `lib/anyascii-0.3.3.jar` — AnyAscii Java library (ISC)
-- `config/` — JSON dictionaries for en, es, fr, de, pt, it + a `replacements.json` pool of rated-G substitution words
-- `admin/` — optional browser-based CRUD for editing the dictionaries
-- `tests/` — 146 assertions across 11 spec files, plain `.cfm` runner, no TestBox/MXUnit dependency
-- `examples/demolitionMan.cfm` — Verbal Morality Statute demo
+- `BadWords.cfc` - single-file engine, scripted
+- `lib/anyascii-0.3.3.jar` - AnyAscii Java library (ISC)
+- `config/` - JSON dictionaries for en, es, fr, de, pt, it + a `replacements.json` pool of rated-G substitution words
+- `admin/` - optional browser-based CRUD for editing the dictionaries
+- `tests/` - 146 assertions across 11 spec files, plain `.cfm` runner, no TestBox/MXUnit dependency
+- `examples/demolitionMan.cfm` - Verbal Morality Statute demo
 
 ## Requirements
 
-- Adobe ColdFusion 2016 or newer (Lucee should also work; not yet verified)
+- Adobe ColdFusion 2016+, Lucee 5+ and BoxLang (in Adobe/Lucee compatibility mode) compatible
 - A way to load the bundled jar (see Install)
 
 ## Install
@@ -127,7 +127,7 @@ Categories are a bitmask. Words can belong to multiple:
 | 6 | 64 | violence |
 | 7 | 128 | substance |
 
-The `punycode` category is reserved — the engine emits it when an `xn--` ACE label is detected. Don't use it in your own dictionary entries.
+The `punycode` category is reserved - the engine emits it when an `xn--` ACE label is detected. Don't use it in your own dictionary entries.
 
 ## Dictionary file format
 
@@ -156,10 +156,10 @@ The `punycode` category is reserved — the engine emits it when an `xn--` ACE l
 
 A browser-based CRUD lives in `admin/`:
 
-- `/admin/index.cfm` — dashboard listing files, word counts, last edit
-- `/admin/editor.cfm?lang=en` — Words / Regex / Allowlist tabs
-- `/admin/replacements.cfm` — length-grouped editor for the rated-G substitution pool, validates entries against `scan()` on save
-- `/admin/test.cfm` — paste text, see `normalize()`, `scan()`, `censor()`, `substitute()` results via `cfdump`
+- `/admin/index.cfm` - dashboard listing files, word counts, last edit
+- `/admin/editor.cfm?lang=en` - Words / Regex / Allowlist tabs
+- `/admin/replacements.cfm` - length-grouped editor for the rated-G substitution pool, validates entries against `scan()` on save
+- `/admin/test.cfm` - paste text, see `normalize()`, `scan()`, `censor()`, `substitute()` results via `cfdump`
 
 Saves are atomic (write to `.tmp`, rename) and create a `.bak` of the previous file.
 
@@ -169,13 +169,13 @@ Saves are atomic (write to `.tmp`, rename) and create a `.bak` of the previous f
 
 Open `/tests/runner.cfm` in a browser. The runner discovers every `.cfm` in `tests/specs/`, runs them in alphabetical order, and renders an HTML report. HTTP status is 200 on all-green, 500 on any failure (curl-friendly for CI). A machine-readable summary is also written to `tests/results/latest.json`.
 
-The assertion helper (`tests/assert.cfc`) provides `isEqual`, `isNotEqual`, `isTrue`, `isFalse`, `includes`, `excludes`, `throwsError`. Method names dodge CF2016 reserved-keyword collisions (`equals`, `contains`, `throws` won't compile as scripted method names).
+The assertion helper (`tests/assert.cfc`) provides `isEqual`, `isNotEqual`, `isTrue`, `isFalse`, `includes`, `excludes`, `throwsError`. Method names dodge CFML reserved-keyword collisions (`equals`, `contains`, `throws` won't compile as scripted method names).
 
 ## Acknowledgements
 
-- [AnyAscii](https://github.com/anyascii/anyascii) by Hunter WB (ISC) — the entire normalization layer.
-- [swearjar-node](https://github.com/ahmedengu/swearjar-node) (MIT) — seed for the English word list, re-encoded to the bitmask format.
-- Matt Gifford's [swearjar](https://forgebox.io/view/swearjar) CFC — API inspiration. No code copied.
+- [AnyAscii](https://github.com/anyascii/anyascii) by Hunter WB (ISC) - the entire normalization layer.
+- [swearjar-node](https://github.com/ahmedengu/swearjar-node) (MIT) - seed for the English word list, re-encoded to the bitmask format.
+- Matt Gifford's [swearjar](https://forgebox.io/view/swearjar) CFC - API inspiration. No code copied.
 
 ## License
 
