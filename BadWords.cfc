@@ -38,18 +38,20 @@ component displayname="BadWords" output="false" hint="Profanity detection and fi
 		string languages = "en",
 		string configPath = "",
 		string jarPath = "",
-		boolean decodePunycode = variables.JTRUE
+		boolean decodePunycode = variables.JTRUE,
+		boolean decodeLeet = variables.JTRUE
 	) {
 		var myDir = getDirectoryFromPath(getMetaData(this).path);
 		variables.configPath     = len(arguments.configPath) ? arguments.configPath : myDir & "config/";
 		variables.jarPath        = len(arguments.jarPath)    ? arguments.jarPath    : myDir & "lib/anyascii-0.3.3.jar";
 		variables.decodePunycode = arguments.decodePunycode;
+		variables.decodeLeet     = arguments.decodeLeet;
 
 		variables.anyAscii       = createObject("java", "com.anyascii.AnyAscii");
 		variables.idn            = createObject("java", "java.net.IDN");
 
 		// Will be populated by subsequent tasks:
-		variables.dict = [ "words": [:], "regex": [], "allow": [:], "replacements": [ "byLength": [:] ] ];
+		variables.dict = [ "words": [:], "wordsByLength": [:], "regex": [], "allow": [:], "replacements": [ "byLength": [:] ] ];
 		variables.loadedLanguages = [];
 		variables.invalidLanguages = [];
 
@@ -96,11 +98,19 @@ component displayname="BadWords" output="false" hint="Profanity detection and fi
 		// Merge words
 		for (var w in data.words) {
 			var entry = data.words[w];
-			variables.dict.words[lcase(w)] = [
+			var lw = lcase(w);
+			variables.dict.words[lw] = [
 				"s":   int(structKeyExists(entry, "s") ? entry.s : 2),
 				"c":   int(structKeyExists(entry, "c") ? entry.c : 0),
 				"src": arguments.languageCode
 			];
+			var lenKey = toString(len(lw));
+			if (!structKeyExists(variables.dict.wordsByLength, lenKey)) {
+				variables.dict.wordsByLength[lenKey] = [];
+			}
+			if (!arrayFindNoCase(variables.dict.wordsByLength[lenKey], lw)) {
+				arrayAppend(variables.dict.wordsByLength[lenKey], lw);
+			}
 		}
 
 		// Merge + compile regex
@@ -142,6 +152,16 @@ component displayname="BadWords" output="false" hint="Profanity detection and fi
 		asciiText     = _stripControlChars(asciiText);
 		asciiText     = lcase(asciiText);
 		asciiText     = _collapseWhitespace(asciiText);
+		if (variables.decodeLeet) {
+			asciiText = _foldLeet(asciiText);
+		}
+		var preCoalesceText = asciiText;
+		var smuggleSpans = [];
+		if (variables.decodeLeet) {
+			var co = _coalesceSpacedLetters(asciiText);
+			asciiText = co.coalesced;
+			smuggleSpans = co.spans;
+		}
 
 		var tokens  = this.tokenize(asciiText);
 		var results = [];
@@ -153,14 +173,69 @@ component displayname="BadWords" output="false" hint="Profanity detection and fi
 			if (structKeyExists(variables.dict.allow, key)) { continue; }
 			if (structKeyExists(variables.dict.words, key)) {
 				var entry = variables.dict.words[key];
+				var remap = _remapHitSpan(t.startPos, t.length, smuggleSpans, preCoalesceText);
 				arrayAppend(results, [
 					"word":       key,
-					"original":   key,
-					"startPos":   t.startPos,
-					"length":     t.length,
+					"original":   remap.smuggle ? remap.original : key,
+					"startPos":   remap.startPos,
+					"length":     remap.length,
 					"severity":   this.severityLabel(entry.s),
 					"categories": this.categoryLabels(entry.c),
-					"source":     "dictionary"
+					"source":     remap.smuggle ? "leet" : "dictionary"
+				]);
+			}
+		}
+
+		// Pass 2b: leet wildcard pass (tokens containing *)
+		if (variables.decodeLeet) {
+			var wildRegex = createObject("java","java.util.regex.Pattern").compile("[\w*':]+");
+			var wildMatcher = wildRegex.matcher(toString(asciiText));
+			while (wildMatcher.find()) {
+				var wtok = wildMatcher.group();
+				if (wtok does not contain "*") { continue; }
+				var letterCount = len(reReplace(wtok, "[^a-z]", "", "all"));
+				if (letterCount lt 2) { continue; }
+				var wStart = wildMatcher.start() + 1;
+				var wLen   = wildMatcher.end() - wildMatcher.start();
+
+				// Primary candidate: the token itself.
+				// Secondary phonetic: leading "ph" + letter/wildcard -> try "f..."
+				var candidates = [ wtok ];
+				if (wLen gte 3
+					&& left(wtok, 2) eq "ph"
+					&& reFind("[a-z*]", mid(wtok, 3, 1))) {
+					arrayAppend(candidates, "f" & mid(wtok, 3, wLen - 2));
+				}
+
+				var matched = "";
+				for (var tryTok in candidates) {
+					var tryLen = len(tryTok);
+					var tryKey = toString(tryLen);
+					if (!structKeyExists(variables.dict.wordsByLength, tryKey)) { continue; }
+					for (var candidate in variables.dict.wordsByLength[tryKey]) {
+						var ok = variables.JTRUE;
+						for (var ci = 1; ci lte tryLen; ci++) {
+							var wc = mid(tryTok, ci, 1);
+							if (wc eq "*") { continue; }
+							if (wc neq mid(candidate, ci, 1)) { ok = variables.JFALSE; break; }
+						}
+						if (ok) { matched = candidate; break; }
+					}
+					if (len(matched) neq 0) { break; }
+				}
+				if (len(matched) eq 0) { continue; }
+				if (structKeyExists(variables.dict.allow, matched)) { continue; }
+				if (structKeyExists(variables.dict.allow, wtok))    { continue; }
+				var wEntry = variables.dict.words[matched];
+				var wRemap = _remapHitSpan(wStart, wLen, smuggleSpans, preCoalesceText);
+				arrayAppend(results, [
+					"word":       matched,
+					"original":   wRemap.smuggle ? wRemap.original : wtok,
+					"startPos":   wRemap.startPos,
+					"length":     wRemap.length,
+					"severity":   this.severityLabel(wEntry.s),
+					"categories": this.categoryLabels(wEntry.c),
+					"source":     "leet"
 				]);
 			}
 		}
@@ -190,21 +265,25 @@ component displayname="BadWords" output="false" hint="Profanity detection and fi
 			while (matcher.find()) {
 				var matched = matcher.group();
 				var sPos    = matcher.start() + 1;
-				var ePos    = matcher.end();
+				var mLen    = matcher.end() - matcher.start();
 				if (structKeyExists(variables.dict.allow, matched)) { continue; }
+				// Remap to pre-coalesce positions (claimed ranges live there too).
+				var rRemap = _remapHitSpan(sPos, mLen, smuggleSpans, preCoalesceText);
+				var rStart = rRemap.startPos;
+				var rEnd   = rStart + rRemap.length - 1;
 				var swallowed = variables.JFALSE;
 				for (var c in claimed) {
-					if (sPos gte c.start && ePos lte c.end) { swallowed = variables.JTRUE; break; }
+					if (rStart gte c.start && rEnd lte c.end) { swallowed = variables.JTRUE; break; }
 				}
 				if (swallowed) { continue; }
 				arrayAppend(results, [
 					"word":       matched,
-					"original":   matched,
-					"startPos":   sPos,
-					"length":     ePos - sPos + 1,
+					"original":   rRemap.smuggle ? rRemap.original : matched,
+					"startPos":   rStart,
+					"length":     rRemap.length,
 					"severity":   this.severityLabel(rx.s),
 					"categories": this.categoryLabels(rx.c),
-					"source":     "regex"
+					"source":     rRemap.smuggle ? "leet" : "regex"
 				]);
 			}
 		}
@@ -217,11 +296,19 @@ component displayname="BadWords" output="false" hint="Profanity detection and fi
 	}
 
 	public void function addWord(required string word, string severity = "moderate", any categories = []) {
-		variables.dict.words[lcase(trim(arguments.word))] = [
+		var lw = lcase(trim(arguments.word));
+		variables.dict.words[lw] = [
 			"s":   this.severityCode(arguments.severity),
 			"c":   this.categoryMask(arguments.categories),
 			"src": "runtime"
 		];
+		var lenKey = toString(len(lw));
+		if (!structKeyExists(variables.dict.wordsByLength, lenKey)) {
+			variables.dict.wordsByLength[lenKey] = [];
+		}
+		if (!arrayFindNoCase(variables.dict.wordsByLength[lenKey], lw)) {
+			arrayAppend(variables.dict.wordsByLength[lenKey], lw);
+		}
 	}
 
 	public void function addRegex(required string pattern, string severity = "moderate", any categories = []) {
@@ -357,6 +444,7 @@ component displayname="BadWords" output="false" hint="Profanity detection and fi
 			"severities":                variables.SEVERITY,
 			"categories":                variables.CATEGORY,
 			"decodePunycode":            variables.decodePunycode,
+			"decodeLeet":                variables.decodeLeet,
 			"wordCounts":                wordCounts,
 			"regexCount":                arrayLen(variables.dict.regex),
 			"allowCount":                structCount(variables.dict.allow)
@@ -490,5 +578,93 @@ component displayname="BadWords" output="false" hint="Profanity detection and fi
 			last = pick;
 		}
 		return out;
+	}
+
+	private string function _foldLeet(required string text) {
+		var out = arguments.text;
+		out = replace(out, "@", "a", "all");
+		out = replace(out, "$", "s", "all");
+		out = replace(out, "!", "i", "all");
+		out = replace(out, "0", "o", "all");
+		out = replace(out, "1", "i", "all");
+		out = replace(out, "3", "e", "all");
+		out = replace(out, "4", "a", "all");
+		out = replace(out, "5", "s", "all");
+		out = replace(out, "7", "t", "all");
+		out = replace(out, "+", "t", "all");
+		out = replace(out, chr(162), "c", "all");
+		out = replace(out, "(", "c", "all");
+		out = replace(out, "##", "h", "all");
+		return out;
+	}
+
+	/**
+	 * Maps a hit's (startPos, length) from post-coalesce asciiText coordinates
+	 * back to pre-coalesce coordinates (which align with normalize() output and
+	 * the raw input for ASCII text). Returns { startPos, length, original, smuggle }.
+	 *
+	 * If the hit is fully inside a smuggle span, expands to the full pre-coalesce
+	 * run (e.g. "fuck" at coalesce pos 31-34 becomes "f u c k" at pre-coalesce
+	 * pos 31-37) and sets smuggle = true. Otherwise shifts startPos right by the
+	 * accumulated coalesce deltas of every span that ended before the hit.
+	 */
+	private struct function _remapHitSpan(required numeric startPos, required numeric length, required array spans, required string preCoalesceText) {
+		for (var sp in arguments.spans) {
+			if (arguments.startPos gte sp.outStart && (arguments.startPos + arguments.length - 1) lte sp.outEnd) {
+				var origLen = sp.origEnd - sp.origStart + 1;
+				return [
+					"startPos": sp.origStart,
+					"length":   origLen,
+					"original": mid(arguments.preCoalesceText, sp.origStart, origLen),
+					"smuggle":  true
+				];
+			}
+		}
+		var adjusted = arguments.startPos;
+		for (var sp in arguments.spans) {
+			if (sp.outEnd lt arguments.startPos) {
+				adjusted += (sp.origEnd - sp.origStart + 1) - (sp.outEnd - sp.outStart + 1);
+			}
+		}
+		return [
+			"startPos": adjusted,
+			"length":   arguments.length,
+			"original": mid(arguments.preCoalesceText, adjusted, arguments.length),
+			"smuggle":  false
+		];
+	}
+
+	/**
+	 * Collapses runs of 3+ single-letter tokens separated by single spaces
+	 * (e.g. "f u c k" -> "fuck"). Returns { coalesced, spans } where each span
+	 * is { origStart, origEnd, outStart, outEnd } (1-based, inclusive) for
+	 * remapping hit positions back to pre-coalesce coordinates.
+	 */
+	private struct function _coalesceSpacedLetters(required string text) {
+		var src = arguments.text;
+		var p = createObject("java","java.util.regex.Pattern").compile("(?i)(?:\b[a-z]\s){2,}\b[a-z]\b");
+		var m = p.matcher(toString(src));
+		var out = "";
+		var spans = [];
+		var lastEnd = 0;
+		while (m.find()) {
+			var s = m.start();
+			var e = m.end();
+			var run = m.group();
+			var reconstructed = reReplace(run, "\s", "", "all");
+			out &= mid(src, lastEnd + 1, s - lastEnd);
+			var outStart = len(out) + 1;
+			out &= reconstructed;
+			var outEnd = len(out);
+			arrayAppend(spans, [
+				"origStart": s + 1,
+				"origEnd":   e,
+				"outStart":  outStart,
+				"outEnd":    outEnd
+			]);
+			lastEnd = e;
+		}
+		out &= mid(src, lastEnd + 1, len(src) - lastEnd);
+		return [ "coalesced": out, "spans": spans ];
 	}
 }

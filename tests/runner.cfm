@@ -1,5 +1,21 @@
 <cfscript>
 	start = getTickCount();
+	runTimestamp = dateTimeFormat(now(), "yyyy-mm-dd'T'HH:nn:ss");
+
+	// Engine detection: BoxLang > Lucee > Adobe (BoxLang in adobe-compat still exposes server.boxlang)
+	engineName    = "CFML";
+	engineVersion = "?";
+	if (structKeyExists(server, "boxlang")) {
+		engineName    = "BoxLang";
+		engineVersion = structKeyExists(server.boxlang, "version") ? server.boxlang.version : "?";
+	} else if (structKeyExists(server, "lucee")) {
+		engineName    = "Lucee";
+		engineVersion = structKeyExists(server.lucee, "version") ? server.lucee.version : "?";
+	} else if (structKeyExists(server, "coldfusion")) {
+		engineName    = structKeyExists(server.coldfusion, "productname")    ? server.coldfusion.productname    : "CFML";
+		engineVersion = structKeyExists(server.coldfusion, "productversion") ? server.coldfusion.productversion : "?";
+	}
+
 	request.testResults = [ "total": 0, "pass": 0, "fail": 0, "failures": [], "currentFile": "", "files": [:] ];
 	request.assert = new assert();
 
@@ -36,7 +52,9 @@
 		"files":     request.testResults.files,
 		"failures":  request.testResults.failures,
 		"elapsedMs": elapsed,
-		"timestamp": now()
+		"timestamp": runTimestamp,
+		"engine":    engineName,
+		"version":   engineVersion
 	]));
 
 	if (request.testResults.fail gt 0) {
@@ -54,6 +72,8 @@
 </style></head><body>
 <cfoutput>
 <h1>BadWords test results</h1>
+<p>Engine: <strong>#encodeForHtml(engineName)# #encodeForHtml(engineVersion)#</strong>
+   &nbsp; Run: <strong>#encodeForHtml(runTimestamp)#</strong></p>
 <p>Total: <strong>#request.testResults.total#</strong>
    &nbsp; Pass: <span class="pass">#request.testResults.pass#</span>
    &nbsp; Fail: <span class="fail">#request.testResults.fail#</span>

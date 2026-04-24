@@ -1,6 +1,6 @@
 # cf-badWords
 
-CFML profanity detection and filtering for CFML platforms, backed by AnyAscii so the matcher only ever sees ASCII-7. Handles Unicode pseudo-letters (𝕗𝕦𝕔𝕜), homoglyph attacks (аррӏе.com), Punycode (xn-- ACE labels), zero-width-space smuggling, classic leetspeak, and emoji-as-letters. Ships a curated allowlist so `cockpit`, `Scunthorpe`, `assassin`, `shiitake`, `Penistone`, `analyst`, `bass` and friends stay clean.
+CFML profanity detection and filtering for CFML platforms, backed by AnyAscii so the matcher only ever sees ASCII-7. Handles Unicode pseudo-letters (𝕗𝕦𝕔𝕜), homoglyph attacks (аррӏе.com), Punycode (xn-- ACE labels), zero-width-space smuggling, emoji-as-letters, ASCII leetspeak with symbol/digit bypass (`fu¢k`, `$hit`, `@ss`, `b!tch`, `c0ck`, `m0therf*cker`), single-char wildcards (`f*ck`, `c*nt`), space-smuggled letters (`f u c k`), and `ph→f` phonetic swaps (`ph*ck`). Ships a curated allowlist so `cockpit`, `Scunthorpe`, `assassin`, `shiitake`, `Penistone`, `analyst`, `bass` and friends stay clean.
 
 GitHub: https://github.com/JamoCA/cf-badWords
 
@@ -10,7 +10,7 @@ GitHub: https://github.com/JamoCA/cf-badWords
 - `lib/anyascii-0.3.3.jar` - AnyAscii Java library (ISC)
 - `config/` - JSON dictionaries for en, es, fr, de, pt, it + a `replacements.json` pool of rated-G substitution words
 - `admin/` - optional browser-based CRUD for editing the dictionaries
-- `tests/` - 146 assertions across 11 spec files, plain `.cfm` runner, no TestBox/MXUnit dependency
+- `tests/` - 250+ assertions across 12 spec files, plain `.cfm` runner, no TestBox/MXUnit dependency
 - `examples/demolitionMan.cfm` - Verbal Morality Statute demo
 
 ## Requirements
@@ -58,7 +58,12 @@ bw.substitute("you asshole");      // "you bunnies"  (random rated-G of length 7
 hits = bw.scan("hey 𝕗𝕦𝕔𝕜er, also visit xn--nxasmq6b.com");
 // Returns array of:
 //   { word, original, startPos, length, severity, categories, source }
-// One entry per match. source is "dictionary" | "regex" | "punycode".
+// One entry per match. source is "dictionary" | "regex" | "punycode" | "leet".
+
+bw.scan("fu¢k off");         // 1 hit via symbol fold (¢ -> c)
+bw.scan("f*ck off");          // 1 hit via wildcard match against "fuck"
+bw.scan("f u c k off");       // 1 hit via space-smuggle coalesce
+bw.scan("ph*ck off");         // 1 hit via ph -> f phonetic + wildcard
 ```
 
 ## Loading multiple languages
@@ -80,7 +85,8 @@ new badwords.BadWords(
 	languages      = "en",   // comma-list; invalid codes go to invalidLanguagesRequested
 	configPath     = "",     // dir holding *.json. Default: ./config/ relative to BadWords.cfc
 	jarPath        = "",     // path to anyascii-0.3.3.jar. Default: ./lib/ relative to BadWords.cfc
-	decodePunycode = true    // when true, xn-- ACE labels are decoded AND flagged in scan results
+	decodePunycode = true,   // when true, xn-- ACE labels are decoded AND flagged in scan results
+	decodeLeet     = true    // when true, apply ASCII symbol fold + wildcard + space-coalesce + ph->f
 );
 ```
 

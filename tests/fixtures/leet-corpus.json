@@ -1,0 +1,24 @@
+{
+	"meta": {
+		"source":    "docs/bad-words-test-20260424.md",
+		"generated": "2026-04-24",
+		"notes":     "Variants pruned to cases where a deterministic fold, wildcard match, space-smuggle coalesce, or ph→f secondary can land on an en.json dict entry or regex. Grok's non-standard uses of @/#/7/0 (e.g. f@ck, c0nt, sh#t) are deliberately excluded as documented-miss tail."
+	},
+	"groups": {
+		"fuck": [
+			"fu¢k", "f*ck", "f**k", "fu(k", "f u c k", "ph*ck",
+			"fu¢ker", "fu(ked"
+		],
+		"shit": [
+			"$hit", "sh!t", "5h!t", "sh!7", "$h!t", "5hit",
+			"$h1t", "sh1t", "5h1t", "sh!tt!ng", "$h!tt!ng"
+		],
+		"cunt": [ "c*nt", "¢unt", "¢*nt" ],
+		"bitch": [ "b!tch", "b!7ch", "8!tch", "b1tch", "b!tches", "b*tch", "8itch", "b!+(h" ],
+		"ass": [ "@ss", "@$$", "@sshole", "a$$hole", "@55", "@ssw!pe" ],
+		"dick": [ "d!ck", "d1ck", "d!¢k", "d*ck" ],
+		"pussy": [ "pu$$y", "p*ssy", "pu5sy", "p u s s y" ],
+		"cock": [ "c0ck", "c*ck", "c0(k", "c0¢k", "c0cksucker", "c*cksucker" ],
+		"motherfucker": [ "m0therf*cker", "m0therf**ker", "m0th3rf*ck3r", "m0th3rfu¢k3r" ]
+	}
+}
